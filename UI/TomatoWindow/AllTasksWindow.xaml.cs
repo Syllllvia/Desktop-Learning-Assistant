@@ -12,9 +12,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
-using DesktopLearningAssistant.TomatoClock.Model;
-using DesktopLearningAssistant.TomatoClock;
-using DesktopLearningAssistant.TomatoClock.SQLite;
+using DesktopLearningAssistant.TaskTomato.Model;
+using DesktopLearningAssistant.TaskTomato;
 
 namespace UI.Tomato
 {
@@ -22,58 +21,145 @@ namespace UI.Tomato
     /// AllTasksWindow.xaml 的交互逻辑
     /// </summary>
     ///
- 
+
+    public class TaskItem
+    {
+        public int ID { get; set; }
+        public string Name { get; set; }
+
+        public String StartTime { get; set; }
+        public String DeadLine { get; set; }
+        public bool finishedTomato { get; set; }
+        public int totalTomato { get; set; }
+        public List<Image> TomatoImageList { get; set; }
+    }
+
     public partial class AllTasksWindow : Window
     {
-        public TaskInfo taskinfo;
-        public TaskService tasksercive;
+        TaskTomatoService tts = TaskTomatoService.GetTaskTomatoService();
+        TaskInfo taskInfo = new TaskInfo();
+        TaskItem taskItem = new TaskItem();
+
+        public Image TomatoFinishedImage;
+
+        public List<TaskItem> TaskItems { get; set; }
 
         public AllTasksWindow()
         {
-           InitializeComponent(); 
+            InitializeComponent();
 
-           taskinfo=new TaskInfo();
-           int taskid = taskinfo.TaskID;
-           string name = taskinfo.Name;
-           DateTime startTime = taskinfo.StartTime;
-           DateTime deadLine = taskinfo.Deadline;
-           int tomatoNum = taskinfo.TomatoNum;
-           int tomatoCount = taskinfo.TomatoCount;
-           int taskState = taskinfo.TaskState;
-           string notes = taskinfo.Notes;
+            TaskItems = new List<TaskItem>();
 
-           AllTasksDataGrid.Items.Add(new {taskid, name, startTime, deadLine, tomatoNum, tomatoCount, taskState,notes});
+            this.AllTasksListView.ItemsSource = TaskItems;
 
+            UpdateViewModel();
         }
 
-
-        private void Modify_OnClick(object sender, RoutedEventArgs e)
+        private void UpdateViewModel()
         {
-            if (AllTasksDataGrid.SelectedItem != null)
+            TaskItems.Clear();
+            TaskTomatoService tts = TaskTomatoService.GetTaskTomatoService();
+            List<TaskInfo> allTaskInfos = tts.GetAllFinishedTaskInfo();
+            allTaskInfos.AddRange(tts.GetAllUnfinishedTaskInfos());
+            TaskItems.AddRange(TransferTaskItemsFromTaskInfo(allTaskInfos));
+        }
+
+        private List<TaskItem> TransferTaskItemsFromTaskInfo(List<TaskInfo> taskInfos)
+        {
+            List<TaskItem> taskItems = new List<TaskItem>();
+            foreach (TaskInfo taskInfo in taskInfos)
             {
-                tasksercive.ModifyTask(taskinfo);
-                MessageBox.Show("修改成功", "提示");
+                TaskItem taskItem = new TaskItem()
+                {
+                    ID = taskInfo.TaskID,
+                    Name = taskInfo.Name,
+                    StartTime = taskInfo.StartTime.ToString(),
+                    DeadLine = taskInfo.EndTime.ToString(),
+                    finishedTomato = taskInfo.Finished,
+                    totalTomato = taskInfo.TotalTomatoCount,
+                    TomatoImageList = GetTomatoImages(taskInfo.FinishedTomatoCount, taskInfo.TotalTomatoCount)
+                };
+                taskItems.Add(taskItem);
             }
+            return taskItems;
         }
 
-        private void Delete_OnClick(object sender, RoutedEventArgs e)
+        private TaskInfo TransferTaskInfoFromTaskItem(TaskItem taskItem)
         {
-            if (AllTasksDataGrid.SelectedItem != null)
+            return TaskTomatoService.GetTaskTomatoService().GetTaskWithID(taskItem.ID);
+        }
+
+        private List<Image> GetTomatoImages(int tomatoFinishedCount, int tomatoTotalCount)
+        {
+            List<Image> images = new List<Image>();
+
+            for (int i = 0; i < tomatoTotalCount; i++)
             {
-                taskinfo.TaskID = int.Parse(AllTasksDataGrid.SelectedValue.ToString());
-                tasksercive.DeletTask(taskinfo.TaskID);
-                MessageBox.Show("删除成功", "提示");
+                if (i < tomatoFinishedCount)
+                {
+                    images.Add(new Image() { Source = new BitmapImage(new Uri(AppDomain.CurrentDomain.BaseDirectory + @"Image\Tomato-Finished.png", UriKind.Absolute)) });
+                }
+                else
+                {
+                    images.Add(new Image() { Source = new BitmapImage(new Uri(AppDomain.CurrentDomain.BaseDirectory + @"Image\Tomato-Unfinished.png", UriKind.Absolute)) });
+                }
             }
+
+            return images;
         }
 
-        private void Add_OnClick(object sender, RoutedEventArgs e)
+        private void AddNewTask_OnClick(object sender, RoutedEventArgs e)
         {
-            tasksercive.AddTask(taskinfo);
-            MessageBox.Show("添加成功", "提示");
+            NewTaskWindow newTaskWindow = new NewTaskWindow();
+            newTaskWindow.Show();
+            UpdateViewModel();
+        }
 
+        private void DeleteTask(object sender, RoutedEventArgs e)
+        {
+            TaskItem taskItem = AllTasksListView.SelectedItem as TaskItem;
+            if (taskItem == null)
+            {
+                MessageBox.Show("未选中任务");
+                return;
+            }
+            tts.DeleteTask(taskItem.ID);
+            UpdateViewModel();
+        }
+
+        private void ModifyTasks(object sender, RoutedEventArgs e)
+        {
+            TaskItem selectedTaskItem = AllTasksListView.SelectedItem as TaskItem;
+            if (selectedTaskItem == null)
+            {
+                MessageBox.Show("没有选中任务");
+                return;
+            }
+
+            NewTaskWindow newTaskWindow = new NewTaskWindow();
+            newTaskWindow.taskInfo = TransferTaskInfoFromTaskItem(selectedTaskItem);
+            newTaskWindow.isModify = true;
+            newTaskWindow.FillData();
+            newTaskWindow.Show();
+            UpdateViewModel();
+        }
+
+        private void SearchBtn_OnClick(object sender, RoutedEventArgs e)
+        {
+                taskInfo=tts.GetTaskWithName(SearchTextBox.Text);
+                AllTasksListView.Items.Clear();
+                AllTasksListView.Items.Add(taskInfo);
+        }
+
+        private void SearchTextBox_OnTextChanged(object sender, TextChangedEventArgs e) //搜索之后回退
+        {
+            if (SearchTextBox.Text == "")
+            {
+                UpdateViewModel();
+            }
+            else
+                return;
         }
     }
-
-  
-
+    
 }
