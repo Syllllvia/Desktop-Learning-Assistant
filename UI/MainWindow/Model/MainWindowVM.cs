@@ -13,13 +13,17 @@ using System.Windows;
 using System.Threading;
 using DesktopLearningAssistant.Configuration;
 using System.Drawing;
+using System.Windows.Media.Imaging;
+using System.IO;
 
 namespace UI
 {
     public class MainWindowViewModel
     {
-        ITimeStatisticService timeStatisticService = new TimeStatisticService();
-        TaskTomatoService taskTomatoService = new TaskTomatoService();
+        private TimeStatisticService tss = new TimeStatisticService();
+        private TaskTomatoService tts = new TaskTomatoService();
+
+        public TaskInfo currentTaskInfo;
 
         #region 属性
 
@@ -52,18 +56,17 @@ namespace UI
         public List<string> TodayColumnXLabels { get; set; }
         public List<string> WeekColumnXLabels { get; set; }
 
-        public int CurrentTaskId { get; set; }
         public List<RelativeFileItem> RelativeFileItems { get; set; }
 
         /// <summary>
         /// 窗口起始位置
         /// </summary>
-        public double left = SystemParameters.WorkArea.Width;
+        public double Left { get; set; } = SystemParameters.WorkArea.Width;
 
         /// <summary>
         /// 白名单列表
         /// </summary>
-        public List<string> WhiteListNames { get; set; }
+        public List<string> WhiteListKeys { get; set; }
 
         #endregion
 
@@ -71,6 +74,9 @@ namespace UI
 
         public MainWindowViewModel()
         {
+            tss = TimeStatisticService.GetTimeStatisticService();
+            tts = TaskTomatoService.GetTaskTomatoService();
+
             LineSeriesCollection = new SeriesCollection();
             LineXLabels = new List<string>();
 
@@ -83,9 +89,8 @@ namespace UI
             TodayColumnXLabels = new List<string>();
             WeekColumnXLabels = new List<string>();
 
-            CurrentTaskId = 1;
             RelativeFileItems = new List<RelativeFileItem>();
-            WhiteListNames = new List<string>();
+            WhiteListKeys = new List<string>();
 
             Update();
         }
@@ -99,9 +104,33 @@ namespace UI
             GetWeekColunmSeriesData();
             GetTodayPieSeriesData();
             GetWeekPieSeriesData();
-            GetRecentFiles();
             GetLineSeriesData();
-            GetWhiteLists();
+            UpdateWhiteKeys();
+        }
+
+        public void UpdateRelativeFiles()
+        {
+            RelativeFileItems.Clear();
+            if (currentTaskInfo == null) return;
+
+            var relativeFiles = currentTaskInfo.RelativeFiles;
+            foreach (var file in relativeFiles)
+            {
+                if (!File.Exists(file.FilePath)) continue;      // 排除已删除文件
+                if (!file.FilePath.Contains(".")) continue;     // 排除文件夹
+
+                RelativeFileItem relativeFileItem = new RelativeFileItem()
+                {
+                    FilePath = file.FilePath
+                };
+                if (!RelativeFileItems.Contains(relativeFileItem)) RelativeFileItems.Add(relativeFileItem);     // 去重
+            }
+        }
+
+        public void UpdateWhiteKeys()
+        {
+            ConfigService configService = ConfigService.GetConfigService();
+            WhiteListKeys = configService.TTConfig.WhiteLists.Keys.ToList();
         }
 
         #endregion
@@ -109,23 +138,23 @@ namespace UI
         #region 私有方法
 
         /// <summary>
-        /// 最近k个任务效率折线图
+        /// 最近k个任务的效率折线图
         /// </summary>
         private void GetLineSeriesData()
         {
             LineSeriesCollection.Clear();
             LineXLabels.Clear();
-            List<double> values = new List<double>() { 0.7, 0.8, 0.65, 0.89, 0.73, 0.3, 0.56, 0.74};
-            //List<TaskEfficiency> taskEfficiencies = taskTomatoService.GetTaskEfficiencies(DateTime.Now, 5);
-            //for (int i = 0; i < taskEfficiencies.Count && i < 8; i++)
-            //{
-                //LineXLabels.Add(taskEfficiencies[i].Name);
-                //values.Add(taskEfficiencies[i].Efficiency);
-            //}
+            List<double> values = new List<double>();
+            List<TaskEfficiency> taskEfficiencies = tts.GetTaskEfficiencies(DateTime.Now, 5);
+            for (int i = 0; i < taskEfficiencies.Count && i < 8; i++)
+            {
+                LineXLabels.Add(taskEfficiencies[i].Name);
+                values.Add(Math.Round(taskEfficiencies[i].Efficiency, 2));
+            }
             
             LineSeriesCollection.Add(new LineSeries
             {
-                //Title = "Today",
+                Title = "Efficiency",
                 DataLabels = false,
                 Values = new ChartValues<double>(values)
             });
@@ -140,7 +169,7 @@ namespace UI
             TodayColumnXLabels.Clear();
 
             List<double> columnValues = new List<double>();
-            List<UserActivity> userActivities = timeStatisticService.GetUserActivitiesWithin(DateTime.Today, DateTime.Now);
+            List<UserActivity> userActivities = tss.GetUserActivitiesWithin(DateTime.Today, DateTime.Now);
             for (int i = 0; i < userActivities.Count && i < 5; i++)
             {
                 TodayColumnXLabels.Add(userActivities[i].Name);
@@ -165,7 +194,7 @@ namespace UI
             WeekColumnXLabels.Clear();
 
             List<double> columnValues = new List<double>();
-            List<UserActivity> userActivities = timeStatisticService.GetUserActivitiesWithin(beginTime, DateTime.Now);
+            List<UserActivity> userActivities = tss.GetUserActivitiesWithin(beginTime, DateTime.Now);
             for (int i = 0; i < userActivities.Count && i < 5; i++)
             {
                 WeekColumnXLabels.Add(userActivities[i].Name);
@@ -187,7 +216,7 @@ namespace UI
         {
             TodayPieSeriesCollection.Clear();
 
-            List<TypeActivity> ActivityData = timeStatisticService.GetTypeActivitiesWithin(DateTime.Today, DateTime.Now);
+            List<TypeActivity> ActivityData = tss.GetTypeActivitiesWithin(DateTime.Today, DateTime.Now);
             for (int i = 0; i < ActivityData.Count; i++)
             {
                 PieSeries series = new PieSeries();
@@ -210,7 +239,7 @@ namespace UI
             DateTime beginTime = DateTime.Today.AddDays(1 - Convert.ToInt32(DateTime.Now.DayOfWeek.ToString("d")));
             WeekPieSeriesCollection.Clear();
 
-            List<TypeActivity> ActivityData = timeStatisticService.GetTypeActivitiesWithin(beginTime, DateTime.Now);
+            List<TypeActivity> ActivityData = tss.GetTypeActivitiesWithin(beginTime, DateTime.Now);
             for (int i = 0; i < ActivityData.Count; i++)
             {
                 PieSeries series = new PieSeries();
@@ -223,31 +252,6 @@ namespace UI
                 series.Values = chartValue;
                 WeekPieSeriesCollection.Add(series);
             }
-        }
-
-        private void GetRecentFiles()
-        {
-            RelativeFileItems.Clear();
-            TaskTomatoService tts = TaskTomatoService.GetTaskTomatoService();
-            TaskInfo taskInfo = tts.GetTaskWithID(CurrentTaskId);
-
-            if (taskInfo == null) return;
-
-            var relativeFiles = taskInfo.RelativeFiles;
-            foreach (var file in relativeFiles)
-            {
-                RelativeFileItems.Add(new RelativeFileItem()
-                {
-                    IconImage = Image.FromFile("./Image/Set.png"),
-                    FilePath = file.FilePath
-                });
-            }
-        }
-
-        private void GetWhiteLists()
-        {
-            ConfigService configService = ConfigService.GetConfigService();
-            //WhiteListNames = configService.TTConfig.WhiteLists.Keys.ToList();
         }
 
         #endregion

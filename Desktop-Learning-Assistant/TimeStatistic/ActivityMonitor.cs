@@ -37,6 +37,7 @@ namespace DesktopLearningAssistant.TimeStatistic
         /// 活动数据管理对象，通过TDManager增删改查活动片
         /// </summary>
         private TimeDataManager TDManager;
+        private ConfigService configService;
 
         /// <summary>
         /// 监控线程是否开启的标识，确保只开启一个线程进行监控
@@ -103,7 +104,7 @@ namespace DesktopLearningAssistant.TimeStatistic
         /// </summary>
         public ActivityMonitor()
         {
-            var configService = ConfigService.GetConfigService();
+            configService = ConfigService.GetConfigService();
             timeSlice = configService.TSConfig.TimeSlice;
             TDManager = TimeDataManager.GetTimeDataManager();       // 注入DataManager
         }
@@ -170,10 +171,9 @@ namespace DesktopLearningAssistant.TimeStatistic
                     Process proc = Process.GetProcessById(Convert.ToInt32(pid));
 
                     // 如果是新发现的进程，则加入类型字典中
-                    ConfigService configService = ConfigService.GetConfigService();
                     if (!configService.TSConfig.TypeDict.ContainsKey(proc.ProcessName))
                     {
-                        ConfigService.GetConfigService().TSConfig.TypeDict.Add(proc.ProcessName, "其他");
+                        configService.TSConfig.TypeDict.Add(proc.ProcessName, "其他");
                     }
 
                     UserActivityPiece currentUAP = new UserActivityPiece
@@ -201,17 +201,26 @@ namespace DesktopLearningAssistant.TimeStatistic
                         {
                             // 更新UAP数组
                             lastUAP.Finished = true;
+                            Console.WriteLine("————————————————————");
+                            foreach (var uap in userActivityPieces)
+                            {
+                                Console.WriteLine(uap.ToString());
+                            }
+                            Console.WriteLine(currentUAP.ToString());
                             userActivityPieces.Add(currentUAP);
 
                             // 更新KA数组
+                            /*
                             if ((lastUAP.Name == "explorer" || lastUAP.Name == "Idle") && userActivityPieces.Count >= 3)    // Windows在杀进程前会先转入explorer或Idle，所以出现这种情况时需要再回溯一层UAP
                             {
                                 lastUAP = userActivityPieces[userActivityPieces.Count - 3];
                             }
+                            
                             if (Process.GetProcesses().Count(p => p.ProcessName == lastUAP.Name) == 0)     // 当前窗口发送了变化时，检测上一个窗口的进程是否被关闭（可能也只是隐藏）。
                             {
                                 TDManager.KilledActivities.Add(new UserActivity(lastUAP));  // 记录被杀死的进程
                             }
+                            */
                         }
                     }
                     uniqueMonitor.DataUpdateEvent?.Invoke(this, new EventArgs());

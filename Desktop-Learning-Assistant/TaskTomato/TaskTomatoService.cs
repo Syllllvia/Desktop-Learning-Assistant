@@ -135,11 +135,11 @@ namespace DesktopLearningAssistant.TaskTomato
         /// </summary>
         /// <param name="name"></param>
         /// <returns></returns>
-        public TaskInfo GetTaskWithName(string name)
+        public List<TaskInfo> GetTaskWithName(string name)
         {
             using (var context = Context)
             {
-                TaskInfo taskInfo = context.TaskModels.Include(tm => tm.Tomatoes).Include(tm => tm.RelativeFiles).FirstOrDefault(t => t.Name == name);
+                List<TaskInfo> taskInfo = context.TaskModels.Include(tm => tm.Tomatoes).Include(tm => tm.RelativeFiles).Where(t => t.Name.Contains(name)).ToList();
                 return taskInfo;
             }
         }
@@ -187,12 +187,13 @@ namespace DesktopLearningAssistant.TaskTomato
         /// 设定任务已完成
         /// </summary>
         /// <param name="taskID"></param>
-        private void SetTaskFinished(int taskID)
+        public void SetTaskFinished(TaskInfo taskInfo)
         {
             using (var context = Context)
             {
-                var task = new TaskInfo() { TaskID = taskID, Finished = true };
-                context.Entry(task).State = EntityState.Modified;
+                taskInfo.Finished = true;
+                taskInfo.EndTime = DateTime.Now;
+                context.Entry(taskInfo).State = EntityState.Modified;
                 context.SaveChanges();
             }
         }
@@ -214,12 +215,6 @@ namespace DesktopLearningAssistant.TaskTomato
 
                 // 将番茄钟加入表中
                 context.TomatoesModels.Add(tomato);
-
-                // 把焦点任务加入表中
-                foreach (FocusApp focusApp in tomato.FocusApps)
-                {
-                    context.FocusAppModels.Add(focusApp);
-                }
 
                 // 修改任务状态
                 taskInfo.FinishedTomatoCount++;
@@ -250,6 +245,7 @@ namespace DesktopLearningAssistant.TaskTomato
             List<TaskInfo> allTaskInfos = GetAllFinishedTaskInfo();
             allTaskInfos.Sort((t1, t2) => { return t1.EndTime > t2.EndTime ? 1 : 0; });     // 按结束时间由晚到早排序
             List<TaskEfficiency> taskEfficiencies = new List<TaskEfficiency>();
+            
             foreach (TaskInfo taskInfo in allTaskInfos)
             {
                 if (taskEfficiencies.Count >= taskCount) break;
@@ -271,6 +267,15 @@ namespace DesktopLearningAssistant.TaskTomato
 
         #region 私有函数
 
+        private Tomato GetFullTomato(int tomatoId)
+        {
+            using (var context = Context)
+            {
+                var query = context.TomatoesModels.Include(tm => tm.FocusApps).Where(tm => tm.TomatoID == tomatoId).FirstOrDefault();
+                return query;
+            }
+        }
+
         /// <summary>
         /// 查找一段时间内打开的文件
         /// </summary>
@@ -289,7 +294,7 @@ namespace DesktopLearningAssistant.TaskTomato
             foreach (var fileInfo in fileInfos)
             {
                 if (!fileInfo.Exists) continue;
-                if (!(fileInfo.CreationTime > beginTime && fileInfo.CreationTime < endTime)) continue;
+                if (!(fileInfo.LastAccessTime >= beginTime && fileInfo.LastAccessTime <= endTime)) continue;
 
                 // 获取快捷路径指向的位置
                 WshShell shell = new WshShell();
@@ -324,10 +329,14 @@ namespace DesktopLearningAssistant.TaskTomato
         /// <returns></returns>
         private double GetTomatoEfficiency(Tomato tomato)
         {
+            tomato = GetFullTomato(tomato.TomatoID);
+            if (tomato == null) return 0;
+
             TimeStatisticService tss = TimeStatisticService.GetTimeStatisticService();
             List<UserActivity> userActivities = tss.GetUserActivitiesWithin(tomato.BeginTime, tomato.EndTime);
             TimeSpan focusTime = new TimeSpan();
-            TimeSpan totalTime = tomato.EndTime - tomato.EndTime;
+            TimeSpan totalTime = tomato.EndTime - tomato.BeginTime;
+            if (totalTime.TotalSeconds <= 0) return 0;
 
             List<string> focusAppNames = new List<string>();
             foreach (var focusApp in tomato.FocusApps)

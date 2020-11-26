@@ -1,293 +1,262 @@
 ﻿using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Forms;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 using System.Windows.Threading;
-using Panuon.UI.Silver;
 using LiveCharts;
 using LiveCharts.Wpf;
-using UI.Process;
-using System.ComponentModel;
-using System.Threading;
-using DesktopLearningAssistant.TimeStatistic;
 using DesktopLearningAssistant.TaskTomato;
 using DesktopLearningAssistant.TaskTomato.Model;
-using UI.Tomato;
-using TTomato = DesktopLearningAssistant.TaskTomato.Model.Tomato;
+using DesktopLearningAssistant.Configuration;
+using UI.AllTaskWindow;
+using UI.FileWindow;
+using DesktopLearningAssistant.TagFile;
+using System.IO;
+using Panuon.UI.Silver;
 
 namespace UI
 {
     /// <summary>
     /// MainWindow.xaml 的交互逻辑
     /// </summary>
-    public partial class MainWindow : Window
+    public partial class MainWindow : WindowX
     {
         #region 屏幕时间统计模块
 
-        private MainWindowViewModel mainWindowViewModel = new MainWindowViewModel();
-        private int updateSlice = 5;       // 更新屏幕时间统计数据的时间间隔（秒）
+        private int updateSlice = 15;       // 更新屏幕时间统计数据的时间间隔（秒）
         private DispatcherTimer timeDataUpdateTimer = new DispatcherTimer();
 
-        private void TimeDataUpdateTimer_Tick(object sender, EventArgs e)
+        private void TodayPieChart_OnDataClick(object sender, ChartPoint chartpoint)
         {
-            this.Dispatcher.Invoke(new Action(mainWindowViewModel.Update));
-        }
-
-        #endregion
-        private NotifyIcon notifyIcon = null;
-
-        #region 任务/番茄钟模块
-
-        private TaskTomatoService tts = TaskTomatoService.GetTaskTomatoService();
-
-        private TimeCount timeCount;
-        private double m_Percent = 0;
-        private bool m_IsStart = false;
-
-        private DispatcherTimer tomatoTimer;
-
-        
-
-        private void UpdateRecentFilesListView()
-        {
-            
-        }
-
-        #endregion
-
-        #region 文件管理模块
-
-        private void File_DragEnter(object sender, System.Windows.DragEventArgs e)
-        {
-            //MessageBox.Show("File Drop Enter");
-            Debug.WriteLine("drag in");
-            if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
-                e.Effects = System.Windows.DragDropEffects.Link;
-            else
-                e.Effects = System.Windows.DragDropEffects.None;
-        }
-
-        private void File_Drop(object sender, System.Windows.DragEventArgs e)
-        {
-            System.Windows.MessageBox.Show("File Drop");
-            Debug.WriteLine("drop");
-            var tagWindow = new FileWindow.FileWindow();
-            tagWindow.Show();
-        }
-
-        #endregion
-
-        private DispatcherTimer m_Timer1 = new DispatcherTimer();
-
-        System.Windows.Forms.Timer _timer = new System.Windows.Forms.Timer();
-
-        public MainWindow()
-        {
-            InitializeComponent();
-
-
-
-            this.Loaded += new RoutedEventHandler(TomatoClock_OnLoaded); //***加载倒计时
-            //25分钟走完一个番茄钟
-            //  m_Timer1.Interval = new TimeSpan(0, 0, 0, 15, 0);
-            m_Timer1.Interval = new TimeSpan(0, 0, 0, 15, 0);
-
-            m_Timer1.Tick += M_Timer1_Tick;
-
-            this.DataContext = mainWindowViewModel;
-
-            // 定时更新ViewModel数据
-            timeDataUpdateTimer.Interval = new TimeSpan(0, 0, 0, updateSlice);
-            timeDataUpdateTimer.Tick += TimeDataUpdateTimer_Tick;
-            timeDataUpdateTimer.Start();
-
-
-
-
-        }
-        private void testTmp()
-        {
-            TaskInfo taskInfo1 = new TaskInfo()
-            {
-                Name = "重写美偲的接口",
-                Notes = "……",
-                TotalTomatoCount = 5,
-                StartTime = DateTime.Today,
-                EndTime = DateTime.Today.AddDays(1),
-            };
-
-            TaskInfo taskInfo2 = new TaskInfo()
-            {
-                Name = "解决频闪问题",
-                Notes = "……",
-                TotalTomatoCount = 5,
-                StartTime = DateTime.Today,
-                EndTime = DateTime.Today.AddDays(1),
-            };
-
-            TaskTomatoService tts = TaskTomatoService.GetTaskTomatoService();
-            tts.AddTask(taskInfo1);
-            tts.AddTask(taskInfo2);
-
-            TaskInfo taskInfo3 = tts.GetTaskWithID(1);
-            TaskInfo taskInfo4 = tts.GetTaskWithName("解决频闪问题");
-
-            List<TaskInfo> taskInfos = tts.GetAllUnfinishedTaskInfos();
-
-            tts.DeleteTask(taskInfo3.TaskID);
-            tts.DeleteTask(taskInfo4.TaskID);
-
-            tts.AddTask(taskInfo1);
-            TTomato tomato = new TTomato()
-            {
-                TaskID = 1,
-                BeginTime = DateTime.Today,
-                EndTime = DateTime.Now
-            };
-            tts.FinishedOneTomato(tomato);
-            taskInfos = tts.GetAllUnfinishedTaskInfos();
-        }
-
-
-        private void Chart_OnDataClick(object sender, ChartPoint chartpoint)
-        {
-            var chart = (LiveCharts.Wpf.PieChart) chartpoint.ChartView;
+            var chart = (LiveCharts.Wpf.PieChart)chartpoint.ChartView;
 
             //clear selected slice.
             foreach (PieSeries series in chart.Series)
                 series.PushOut = 0;
 
-            var selectedSeries = (PieSeries) chartpoint.SeriesView;
+            var selectedSeries = (PieSeries)chartpoint.SeriesView;
             selectedSeries.PushOut = 8;
         }
-        private void M_Timer1_Tick(object sender, EventArgs e)
-        {
-            m_Percent += 0.01;
-            if (m_Percent > 1)
-            {
-                m_Percent = 1;
-                m_Timer1.Stop();
-                m_IsStart = false;
-                StartChange(m_IsStart);
-            }
 
-            circleProgressBar.CurrentValue1 = m_Percent;
+        private void TimeDataUpdateTimer_Tick(object sender, EventArgs e)
+        {
+            this.Dispatcher.Invoke(new Action(viewModel.Update));
         }
+
+        #endregion
+
+        #region 任务/番茄钟模块
+
+        private TomatoClockManager clockManager;
+        private ClockState nextState;       // 下一个预备的状态
+        private TaskTomatoService tts;
+
+        private TaskInfo CurrentTaskInfo    // 间接使用viewModel中的currentTasskInfo
+        {
+            get
+            {
+                return viewModel.currentTaskInfo;
+            }
+            set
+            {
+                viewModel.currentTaskInfo = value;
+            }
+        }
+
         /// <summary>
-        /// UI变化
+        /// 在构造函数中被调用，把番茄钟部分的构造代码放入此函数
         /// </summary>
-        /// <param name="bState"></param>
-        private void StartChange(bool bState)
+        private void InitTaskClockModule()
         {
-            if (bState)
-                btn.Content = "停止";
-            else
-                btn.Content = "开始";
+            clockManager = new TomatoClockManager(configService.TTConfig.WorkTimeSpan, configService.TTConfig.RelaxTimeSpan);
+            clockManager.WorkClockFinishedEvent += WorkClockFinishedHandler;
+            clockManager.RelaxClockFinishedEvent += RelaxClockFinishedHandler;
+            clockManager.ClockTickEvent += ClockTickEventHandler;
+            nextState = ClockState.Working;
+            tts = TaskTomatoService.GetTaskTomatoService();
+
+            UpdateCurrentTaskInfo();
+            viewModel.UpdateRelativeFiles();
+            RelativeFilesListView.Items.Refresh();
         }
 
-        private void ButtonStart_Click(object sender, RoutedEventArgs e)
+        private void ClockBtn_Click(object sender, RoutedEventArgs e)
         {
-            if (m_IsStart)
+            // 在番茄钟未完成时结束
+            if (nextState == ClockState.Stop)
             {
-                m_Timer1.Stop();
-                m_IsStart = false;
-
-            }
-            else
-            {
-                // m_Percent = 0;
-                m_Timer1.Start();
-                m_IsStart = true;
-                tomatoTimer.Start();
-                Thread thread = new Thread(new ThreadStart(() =>
+                if (clockManager.clockState == ClockState.Working)
                 {
-                    for (int i = 1; i <= 2500; i++)
-                    {
-                        //      this.TomatoProgressBar.Dispatcher.Invoke(() => this.TomatoProgressBar.Value = i);
-                        Thread.Sleep(10000);
-                    }
-                }));
-                thread.Start();
+                    nextState = ClockState.Working;
+                    MinuteTextBlock.Text = configService.TTConfig.WorkTimeSpan.Minutes.ToString("D2");
+                    SecondTextClock.Text = configService.TTConfig.WorkTimeSpan.Seconds.ToString("D2");
+                }
+                
+                else if (clockManager.clockState == ClockState.Relaxing)
+                {
+                    nextState = ClockState.Working;
+                    MinuteTextBlock.Text = configService.TTConfig.RelaxTimeSpan.Minutes.ToString("D2");
+                    SecondTextClock.Text = configService.TTConfig.RelaxTimeSpan.Seconds.ToString("D2");
+                }
+
+                ProgressBar.CurrentValue = 1;
+                ClockBtnImage.Source = new BitmapImage(new Uri("../Image/Start.png", UriKind.Relative));
+
+                clockManager.AbortClock();
+                return;
             }
-            circleProgressBar.CurrentValue1 = 0;
-            StartChange(m_IsStart);
-        }
 
-        private void TomatoClock_OnLoaded(object sender, RoutedEventArgs e)
-        {
-            //设置定时器
-            tomatoTimer = new DispatcherTimer();
-            tomatoTimer.Interval = new TimeSpan(10000000); //时间间隔为一秒
-            tomatoTimer.Tick += new EventHandler(Timer_Tick);
-
-            //转换成秒数
-            Int32 minute = Convert.ToInt32(MinuteArea.Text);
-            Int32 second = Convert.ToInt32(SecondArea.Text);
-
-            //处理倒计时的类
-            timeCount = new TimeCount(minute * 60 + second);
-            CountDown += new CountDownHandler(timeCount.TimeCountDown);
-           // timer.Start();
-        }
-
-        /// <summary>
-        /// 处理倒计时的委托
-        /// </summary>
-
-        public delegate bool CountDownHandler();
-
-        /// <summary>
-        /// 处理事件
-        /// </summary>
-        public event CountDownHandler CountDown;
-
-        public bool OnCountDown()
-        {
-            if (CountDown != null)
-                return CountDown();
-
-            return false;
-        }
-
-        private void Timer_Tick(object sender, EventArgs e)
-        {
-            if (OnCountDown())
+            if (nextState == ClockState.Working)
             {
-                MinuteArea.Text = timeCount.GetMinute();
-                SecondArea.Text = timeCount.GetSecond();
+                clockManager.StartWorkClock();
+            }
+            else if (nextState == ClockState.Relaxing)
+            {
+                clockManager.StartRelaxClock();
+            }
+
+            nextState = ClockState.Stop;
+            ClockBtnImage.Source = new BitmapImage(new Uri("../Image/Pause.png", UriKind.Relative));
+        }
+
+        /// <summary>
+        /// 打开所有任务界面
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void OpenAllTasksWindow(object sender, RoutedEventArgs e)
+        {
+            AllTasksWindow allTasksWindow = new AllTasksWindow(CurrentTaskInfo);
+            allTasksWindow.ShowDialog();
+            if (allTasksWindow.StartTaskInfo == null)
+            {
+                UpdateCurrentTaskInfo();
             }
             else
-                tomatoTimer.Stop();
+            {
+                UpdateCurrentTaskInfo(allTasksWindow.StartTaskInfo);
+            }
         }
 
-        private void Button_Click(object sender, RoutedEventArgs e)
+        /// <summary>
+        /// 双击打开相关文件
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void RelativeFilesListView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
-            Settings settings = new Settings();
-            settings.Show();
+            int selectedIndex = RelativeFilesListView.SelectedIndex;
+            if (selectedIndex == -1) return;
+            string filePath = viewModel.RelativeFileItems[selectedIndex].FilePath;
 
+            if (!File.Exists(filePath)) return;
+
+            FileUtils.OpenFile(filePath);   // 用默认程序打开文件
         }
 
-
-        private void TimeCountPause_Click(object sender, MouseButtonEventArgs e)
+        /// <summary>
+        /// clockTimer完成一个工作钟时回调
+        /// </summary>
+        private void WorkClockFinishedHandler(object sender)
         {
-            tomatoTimer.Stop();
-            m_Timer1.Stop();
-            ImageSource start = new BitmapImage(new Uri("Image/Start.jpeg", UriKind.Relative));
+            if (CurrentTaskInfo == null) return;
+
+            this.Dispatcher.Invoke(new Action(() =>
+            {
+                string whiteListKey = WhiteListKeyComboBox.Text;
+                configService = ConfigService.GetConfigService();
+
+                if (whiteListKey == "" || whiteListKey == null)
+                {
+                    whiteListKey = configService.TTConfig.WhiteLists.Keys.ToList()[0];
+                }
+
+                Tomato tomato = new Tomato()
+                {
+                    TaskID = CurrentTaskInfo.TaskID,
+                    BeginTime = DateTime.Now - configService.TTConfig.WorkTimeSpan,
+                    EndTime = DateTime.Now,
+                    FocusApps = FocusApp.TransFrom(configService.TTConfig.WhiteLists[whiteListKey])
+                };
+
+                tts.FinishedOneTomato(tomato);
+                nextState = ClockState.Relaxing;
+
+                // UI恢复
+                ClockBtnImage.Source = new BitmapImage(new Uri("../Image/Start.png", UriKind.Relative));
+                viewModel.UpdateRelativeFiles();
+                RelativeFilesListView.Items.Refresh();  // 强制刷新相关文件视图
+
+                // 检查任务是否完成，若完成则换下一个任务
+                CurrentTaskInfo = tts.GetTaskWithID(CurrentTaskInfo.TaskID);
+                if (CurrentTaskInfo.FinishedTomatoCount >= CurrentTaskInfo.TotalTomatoCount)
+                {
+                    tts.SetTaskFinished(CurrentTaskInfo);
+                    UpdateCurrentTaskInfo();
+                }
+            }));
         }
 
+        /// <summary>
+        /// clockTimer完成一个休息钟时回调
+        /// </summary>
+        private void RelaxClockFinishedHandler(object sender)
+        {
+            if (CurrentTaskInfo == null) return;
+            nextState = ClockState.Working;
+            // UI恢复
+
+            this.Dispatcher.Invoke(new Action(() =>
+            {
+                ClockBtnImage.Source = new BitmapImage(new Uri("../Image/Start.png", UriKind.Relative));
+            }));
+        }
+        
+        /// <summary>
+        /// 每间隔一秒clockManager就会调用此方法一次，并返回累计时间间隔
+        /// </summary>
+        /// <param name="timeSpan"></param>
+        private void ClockTickEventHandler(object sender, TimeSpan timeSpan)
+        {
+            this.Dispatcher.Invoke(new Action(() => {
+                this.MinuteTextBlock.Text = timeSpan.Minutes.ToString("D2");
+                this.SecondTextClock.Text = timeSpan.Seconds.ToString("D2");
+                this.ProgressBar.CurrentValue = clockManager.Percentage;
+            }));
+        }
+
+        private void UpdateCurrentTaskInfo(TaskInfo taskInfo = null)
+        {
+            if (taskInfo == null) CurrentTaskInfo = tts.GetCurrentTaskInfo();     // 获取一个新的未完成任务
+            else CurrentTaskInfo = taskInfo;
+
+            if (CurrentTaskInfo != null)
+            {
+                CurrentTaskInfoLabel.Text = CurrentTaskInfo.Name;
+                viewModel.UpdateRelativeFiles();
+                RelativeFilesListView.Items.Refresh();
+            }
+            else
+            {
+                CurrentTaskInfoLabel.Text = "没有未完成的任务(*￣▽￣*)";
+                viewModel.RelativeFileItems.Clear();
+                RelativeFilesListView.Items.Refresh();
+            }
+        }
+
+        private void TomatoTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // TODO：效率统计表加载
+        }
+
+        #endregion
+
+        #region 文件管理模块
 
         /// <summary>
         /// 点击“文件管理”按钮
@@ -298,48 +267,59 @@ namespace UI
             new FileWindow.FileWindow().Show();
         }
 
-        private void TabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        /// <summary>
+        /// 文件拖入
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void File_DragEnter(object sender, System.Windows.DragEventArgs e)
         {
-
+            // TODO：做成边框线变动效果
         }
 
-        private void Window_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+        /// <summary>
+        /// 文件拖入且松开
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void File_Drop(object sender, System.Windows.DragEventArgs e)
         {
-            if(e.LeftButton==MouseButtonState.Pressed)
+            if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
             {
-                this.DragMove();
-               
+                string[] files = (string[])e.Data.GetData(System.Windows.DataFormats.FileDrop);
+                if (files.Length < 1) return;
+                AddFileDialog addFileDialog = new AddFileDialog(files[0]);
+                addFileDialog.ShowDialog();
             }
-            if (this.Left < 10)
-                this.Left = 0;
-            else if (this.Left > SystemParameters.WorkArea.Width)
-                this.Left = SystemParameters.WorkArea.Width;
-            if (this.Top < 10)
-                this.Top = 0;
         }
 
-        private void MenuItem_Click(object sender, RoutedEventArgs e)
+        #endregion
+
+        #region 设置、隐藏与关闭
+
+        private NotifyIcon notifyIcon = null;
+
+        private void SettingButton_Click(object sender, RoutedEventArgs e)
         {
+            Settings settings = new Settings();
+            settings.ShowDialog();
 
+            // 番茄钟内的白名单列表需要更新
+            viewModel.UpdateWhiteKeys();
+            WhiteListKeyComboBox.ItemsSource = viewModel.WhiteListKeys;
+            WhiteListKeyComboBox.Items.Refresh();
         }
 
-
-        private void MenuItem_Click_2(object sender, RoutedEventArgs e)
-        {
-            Environment.Exit(0);
-        }
-
-
-        private void OpenAllTasks_OnClick(object sender, RoutedEventArgs e)
-        {
-            AllTasksWindow allTasksWindow=new AllTasksWindow();
-            allTasksWindow.Show();
-        }
-
-        private void MenuItem_Click_1(object sender, RoutedEventArgs e)
+        private void HideMenuItem_Click(object sender, RoutedEventArgs e)
         {
             notify();
         }
+
+        private void ExitMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            this.Close();
+        }
+
         private void notify()
         {
             //隐藏主窗体
@@ -375,14 +355,43 @@ namespace UI
             }
         }
 
-        private void OpenAllTasksWindow(object sender, RoutedEventArgs e)
+        #endregion
+
+        #region 磁吸贴边
+
+        private void Window_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
         {
-            AllTasksWindow allTasksWindow = new AllTasksWindow();
-            allTasksWindow.Show();
+            if (e.LeftButton == MouseButtonState.Pressed)
+            {
+                DragMove();
+            }
+            if (Left < 10)
+                Left = 0;
+            else if (Left > SystemParameters.WorkArea.Width)
+                Left = SystemParameters.WorkArea.Width;
+            if (Top < 10)
+                Top = 0;
         }
 
-   
+        #endregion
+
+        private ConfigService configService;
+        private MainWindowViewModel viewModel = new MainWindowViewModel();
+
+        public MainWindow()
+        {
+            InitializeComponent();
+
+            configService = ConfigService.GetConfigService();
+            DataContext = viewModel;
+
+            // 定时更新ViewModel数据
+            timeDataUpdateTimer.Interval = new TimeSpan(0, 0, 0, updateSlice);
+            timeDataUpdateTimer.Tick += TimeDataUpdateTimer_Tick;
+            timeDataUpdateTimer.Start();
+
+            // 番茄钟部分初始化
+            InitTaskClockModule();
+        }
     }
 }
-
-

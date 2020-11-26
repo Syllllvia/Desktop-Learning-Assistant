@@ -11,21 +11,21 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
-//using Panuon.UI.Silver;
+using Panuon.UI.Silver;
 using DesktopLearningAssistant.TagFile;
+using System.Diagnostics;
 
 namespace UI.FileWindow
 {
     /// <summary>
     /// TagWindow.xaml 的交互逻辑
     /// </summary>
-    public partial class FileWindow : Window
+    public partial class FileWindow : WindowX
     {
         public FileWindow()
         {
             InitializeComponent();
-            TagFileService.EnsureDbAndFolderCreated();//TODO move it
-            winVM = new FileWinVM();
+            winVM = new FileWinVM(this);
             DataContext = winVM;
             SetAlignment();
         }
@@ -57,6 +57,7 @@ namespace UI.FileWindow
         private async void AddTagBtn_Click(object sender, RoutedEventArgs e)
         {
             var dialog = AddOrRenameTagDialog.MakeAddTagDialog();
+            dialog.Owner = this;
             bool result = dialog.ShowDialog().GetValueOrDefault(false);
             if (result)
             {
@@ -72,6 +73,7 @@ namespace UI.FileWindow
         {
             var dialog = new ConfirmDialog(
                 $"你确定要删除标签 {winVM.CurrentTagName} 吗？", "删除标签");
+            dialog.Owner = this;
             if (dialog.ShowDialog().GetValueOrDefault(false))
                 await winVM.RemoveSelectedTagAsync();
         }
@@ -85,6 +87,7 @@ namespace UI.FileWindow
             if (currentName == null)
                 return;
             var dialog = AddOrRenameTagDialog.MakeRenameTagDialog(currentName);
+            dialog.Owner = this;
             if (dialog.ShowDialog().GetValueOrDefault(false))
             {
                 string newTagName = dialog.TagName;
@@ -98,7 +101,10 @@ namespace UI.FileWindow
         private async void AddFileBtn_Click(object sender, RoutedEventArgs e)
         {
             var allTagNames = await winVM.AllTagNamesAsync();
-            var dialog = new AddFileDialog(allTagNames);
+            var dialog = new AddFileDialog(allTagNames)
+            {
+                Owner = this
+            };
             if (dialog.ShowDialog().GetValueOrDefault(false))
                 await winVM.RefreshFilesAsync();
         }
@@ -128,10 +134,11 @@ namespace UI.FileWindow
             if (fileInfo == null)
                 return;
             var dialog = new EditFileDialog(fileInfo, await winVM.AllTagNamesAsync());
+            dialog.Owner = this;
             if (dialog.ShowDialog().GetValueOrDefault(false))
             {
                 var newInfo = dialog.FileInfo;//same ref here
-                await winVM.UpdateSelectedFile(newInfo);
+                await winVM.UpdateSelectedFileAsync(newInfo);
             }
         }
 
@@ -142,8 +149,9 @@ namespace UI.FileWindow
         {
             var dialog = new ConfirmDialog(
                 $"你确定要移动此文件到回收站吗？", "删除文件");
+            dialog.Owner = this;
             if (dialog.ShowDialog().GetValueOrDefault(false))
-                await winVM.DeleteSelectedFileToRecycleBin();
+                await winVM.DeleteSelectedFileToRecycleBinAsync();
         }
 
         /// <summary>
@@ -153,8 +161,9 @@ namespace UI.FileWindow
         {
             var dialog = new ConfirmDialog(
                 $"你确定要彻底删除此文件吗？", "删除文件");
+            dialog.Owner = this;
             if (dialog.ShowDialog().GetValueOrDefault(false))
-                await winVM.DeleteSelectedFile();
+                await winVM.DeleteSelectedFileAsync();
         }
 
         /// <summary>
@@ -202,9 +211,11 @@ namespace UI.FileWindow
         {
             if (intelliLst.SelectedItem != null)
             {
-                string tagName = (intelliLst.SelectedItem as IntelliItem).Name;
+                string tagName = IntelliUtils.EscapeTagName(
+                    (intelliLst.SelectedItem as IntelliItem).Name);
                 int prefixLen = IntelliUtils.ExtractPrefix(tagSearchBox.Text).Length;
-                string textWithoutPrefix = tagSearchBox.Text.Substring(0, tagSearchBox.Text.Length - prefixLen);
+                string textWithoutPrefix = tagSearchBox.Text.Substring(
+                    0, tagSearchBox.Text.Length - prefixLen);
                 tagSearchBox.Text = textWithoutPrefix + tagName + "\" ";
                 tagSearchBox.CaretIndex = tagSearchBox.Text.Length;
             }
